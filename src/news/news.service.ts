@@ -35,12 +35,12 @@ export class NewsService {
         private readonly cacheManager: Cache
     ) { }
 
-    async getLatestNews(page: number = 1) {
+    async getLatestNews(page: number = 1): Promise<ResponseNews> {
         const cacheKey = `latest-news-page-${page}`
 
         const cachedData = await this.cacheManager.get(cacheKey)
 
-        if (cachedData) return cachedData
+        if (cachedData) return cachedData as ResponseNews;
 
         try {
 
@@ -56,7 +56,7 @@ export class NewsService {
                 })
             );
 
-            if(response.data){
+            if (response.data) {
 
                 await this.cacheManager.set(
                     cacheKey,
@@ -69,10 +69,34 @@ export class NewsService {
             throw new InternalServerErrorException(
                 'Dados de resposta inválidos da API externa'
             );
-        } catch (error) {
+        } catch {
             throw new InternalServerErrorException(
                 'Erro ao buscar notícias'
             )
         }
-    }
+    };
+
+
+    async checkUpdates(after: string)
+        : Promise<{ hasNew: boolean, count: number }> {
+        const latestNews =
+            await this.getLatestNews(1);
+
+        const newsList =
+            latestNews.news || [];
+
+        const afterDate =
+            new Date(after);
+
+        const newNews = newsList.filter(
+            (news: TypeNews) => {
+                return new Date(news.published) > afterDate
+            }
+        );
+
+        return {
+            hasNew: newNews.length > 0,
+            count: newNews.length
+        }
+    };
 }
