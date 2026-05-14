@@ -1,0 +1,16 @@
+name: Keep Render Awake
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping API
+        run: |
+          curl "${{secrets.API_URL}}/health" \
+          -H "X-App-Key: ${{ secrets.APP_KEY }}" \
+          -H "User-Agent: ${{secrets.APP_USER_AGENT}}"

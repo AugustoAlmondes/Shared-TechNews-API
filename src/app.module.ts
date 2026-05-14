@@ -6,8 +6,11 @@ import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { SecurityGuard } from './common/guards/security.guard';
 import { NewsModule } from './news/news.module';
+import { HealthModule } from './health/health.module';
 @Module({
   imports: [
+    // Importar o módulo de saúde
+    HealthModule,
     // Importar o módulo de notícias
     NewsModule,
     // Configuração global do módulo de configuração
@@ -29,7 +32,6 @@ import { NewsModule } from './news/news.module';
       ttl: 60000,
       limit: 30
     }]),
-    NewsModule
   ],
   controllers: [],
   providers: [
