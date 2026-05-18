@@ -51,7 +51,7 @@ export class NewsService {
                 category: 'science_technology',
             };
 
-            const [responseEn, responsePt] = await Promise.all([
+            const [responseEn, responsePt, responseEs] = await Promise.all([
                 firstValueFrom(
                     this.httpService.get<ResponseNews>(this.BASE_URL, {
                         params: { ...commonParams, language: 'en' },
@@ -62,14 +62,20 @@ export class NewsService {
                         params: { ...commonParams, language: 'pt' },
                     })
                 ),
+                firstValueFrom(
+                    this.httpService.get<ResponseNews>(this.BASE_URL, {
+                        params: { ...commonParams, language: 'es' },
+                    })
+                ),
             ]);
 
-            if (responseEn.data && responsePt.data) {
+            if (responseEn.data && responsePt.data && responseEs.data) {
 
                 const newsEn: TypeNews[] = responseEn.data.news ?? [];
                 const newsPt: TypeNews[] = responsePt.data.news ?? [];
+                const newsEs: TypeNews[] = responseEs.data.news ?? [];
 
-                const mergedNews: TypeNews[] = [...newsEn, ...newsPt];
+                const mergedNews: TypeNews[] = [...newsEn, ...newsPt, ...newsEs];
 
                 // Fisher-Yates shuffle — embaralha de forma imparcial e uniforme
                 for (let i = mergedNews.length - 1; i > 0; i--) {
@@ -92,6 +98,9 @@ export class NewsService {
             }
             else if (responsePt) {
                 return responsePt.data;
+            }
+            else if (responseEs) {
+                return responseEs.data;
             }
             return {} as ResponseNews;
         } catch {
