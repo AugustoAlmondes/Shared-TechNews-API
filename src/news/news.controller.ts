@@ -17,7 +17,8 @@ export class NewsController {
         @Query() query: GetNewsDto,
     ) {
         return this.newsService.getLatestNews(
-            query.page
+            query.page,
+            query.refresh ?? false,
         )
     };
 
@@ -26,7 +27,7 @@ export class NewsController {
         @Query() query: CheckUpdatesDto,
     ) {
         return this.newsService.checkUpdates(
-            query.after || ""
+            query.after ?? ""
         )
     };
 }
