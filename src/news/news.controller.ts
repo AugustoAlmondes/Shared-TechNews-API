@@ -19,6 +19,7 @@ export class NewsController {
         return this.newsService.getLatestNews(
             query.page,
             query.refresh ?? false,
+            query.languages,
         )
     };
 

@@ -62,7 +62,7 @@ describe('NewsService', () => {
       expect(result.cached).toBe(true);
       expect(result.news[0].id).toBe('1');
       expect(http.get).not.toHaveBeenCalled();
-      expect(cache.get).toHaveBeenCalledWith('latest-news-bilingual-page-1');
+      expect(cache.get).toHaveBeenCalledWith('latest-news:page:1:langs:en-es-pt');
     });
 
     it('cache miss busca na API externa', async () => {
@@ -239,11 +239,11 @@ describe('NewsService', () => {
         cached: true,
       };
       cache.get.mockImplementation((key) => {
-        if (key === 'latest-news-bilingual-page-1') return Promise.resolve(cached);
+        if (key === 'latest-news:page:1:langs:en-es-pt') return Promise.resolve(cached);
         return Promise.resolve(null);
       });
       const result = await service.checkUpdates(new Date(Date.now() - 1000).toISOString());
-      expect(cache.get).toHaveBeenCalledWith('latest-news-bilingual-page-1');
+      expect(cache.get).toHaveBeenCalledWith('latest-news:page:1:langs:en-es-pt');
       expect(result.hasNew).toBe(true);
     });
   });
@@ -322,7 +322,7 @@ describe('NewsService', () => {
       http.get.mockReturnValue(of({ data: { status: 'ok', news: [makeNews({ id: 'p2', published: new Date().toISOString() })], page: 2 } }));
       const result = await service.getLatestNews(2);
       expect(result.page).toBe(2);
-      expect(cache.get).toHaveBeenCalledWith('latest-news-bilingual-page-2');
+      expect(cache.get).toHaveBeenCalledWith('latest-news:page:2:langs:en-es-pt');
     });
 
     it('página vazia retorna hasMore false e count 0', async () => {
@@ -385,7 +385,7 @@ describe('NewsService', () => {
         return Promise.resolve(null);
       });
       for (const val of ['', '   ', null as unknown as string, undefined as unknown as string]) {
-        const n = makeNews({ id: '1', image: val as string, published: new Date().toISOString() });
+        const n = makeNews({ id: '1', image: val, published: new Date().toISOString() });
         http.get.mockReturnValue(of({ data: { status: 'ok', news: [n], page: 1 } }));
         const r = await service.getLatestNews(1);
         expect(r.news[0].image).toBeNull();

@@ -41,12 +41,26 @@ export class NewsService {
         private readonly cacheManager: Cache
     ) { }
 
-    private getCacheKey(page: number): string {
-        return `latest-news-bilingual-page-${page}`;
+    private readonly DEFAULT_LANGUAGES: string[] = ['en', 'pt', 'es'];
+
+    private normalizeLanguages(languages?: string[]): string[] {
+        if (!languages || languages.length === 0) {
+            return [...this.DEFAULT_LANGUAGES].sort();
+        }
+        const normalized = languages
+            .map((l) => l.trim().toLowerCase())
+            .filter((l) => l.length > 0);
+        const unique = [...new Set(normalized)];
+        return unique.sort();
     }
 
-    private getRefreshKey(page: number): string {
-        return `${this.getCacheKey(page)}:lastRefresh`;
+    private getCacheKey(page: number, languages: string[]): string {
+        const langsKey = languages.join('-');
+        return `latest-news:page:${page}:langs:${langsKey}`;
+    }
+
+    private getRefreshKey(page: number, languages: string[]): string {
+        return `${this.getCacheKey(page, languages)}:lastRefresh`;
     }
 
     private normalizeImage(image: unknown): string | null {
@@ -108,15 +122,20 @@ export class NewsService {
         return result;
     }
 
-    async getLatestNews(page: number = 1, forceRefresh: boolean = false): Promise<ResponseNews> {
-        const cacheKey = this.getCacheKey(page);
-        const refreshKey = this.getRefreshKey(page);
+    async getLatestNews(
+        page: number = 1,
+        forceRefresh: boolean = false,
+        languages?: string[],
+    ): Promise<ResponseNews> {
+        const normalizedLanguages = this.normalizeLanguages(languages);
+        const cacheKey = this.getCacheKey(page, normalizedLanguages);
+        const refreshKey = this.getRefreshKey(page, normalizedLanguages);
 
         const cachedData = await this.cacheManager.get<ResponseNews>(cacheKey);
 
         // Consulta normal: retorna cache se válido
         if (!forceRefresh && cachedData) {
-            return { ...cachedData, cached: true } as ResponseNews;
+            return { ...cachedData, cached: true };
         }
 
         // Atualização forçada: verifica cooldown
@@ -125,7 +144,7 @@ export class NewsService {
             const now = Date.now();
             if (lastRefresh && now - lastRefresh < this.REFRESH_COOLDOWN_MS && cachedData) {
                 // Dentro do intervalo de proteção — retorna cache existente
-                return { ...cachedData, cached: true } as ResponseNews;
+                return { ...cachedData, cached: true };
             }
         }
 
@@ -141,9 +160,7 @@ export class NewsService {
                 category: 'science_technology',
             };
 
-            const languages = ['en', 'pt', 'es'];
-
-            const promises = languages.map((language) =>
+            const promises = normalizedLanguages.map((language) =>
                 firstValueFrom(
                     this.httpService.get<ResponseNews>(this.BASE_URL, {
                         params: { ...commonParams, language },
@@ -156,7 +173,7 @@ export class NewsService {
             const successful: ResponseNews[] = [];
             for (const result of settled) {
                 if (result.status === 'fulfilled' && result.value?.data) {
-                    const data = result.value.data as ResponseNews;
+                    const data = result.value.data;
                     // Só considera se tiver estrutura esperada
                     if (Array.isArray(data.news)) {
                         successful.push(data);
@@ -170,7 +187,7 @@ export class NewsService {
             if (successful.length === 0) {
                 // Todas falharam — tenta fallback para cache stale se existir
                 if (cachedData) {
-                    return { ...cachedData, cached: true } as ResponseNews;
+                    return { ...cachedData, cached: true };
                 }
                 throw new InternalServerErrorException('Erro ao buscar notícias');
             }
@@ -180,7 +197,7 @@ export class NewsService {
             let status = 'ok';
             for (const data of successful) {
                 if (data.status) status = data.status;
-                const list: TypeNews[] = (data.news ?? []) as TypeNews[];
+                const list: TypeNews[] = (data.news ?? []);
                 for (const n of list) {
                     allNews.push(this.normalizeNews(n));
                 }
@@ -210,7 +227,7 @@ export class NewsService {
         } catch (error) {
             // Se já temos cache, retorna stale em vez de 500 para resiliência
             if (cachedData) {
-                return { ...cachedData, cached: true } as ResponseNews;
+                return { ...cachedData, cached: true };
             }
             // Evita vazar detalhes internos
             if (error instanceof InternalServerErrorException) throw error;
