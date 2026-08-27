@@ -28,7 +28,8 @@ export class NewsController {
         @Query() query: CheckUpdatesDto,
     ) {
         return this.newsService.checkUpdates(
-            query.after ?? ""
+            query.after ?? "",
+            query.languages,
         )
     };
 }

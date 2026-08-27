@@ -31,7 +31,8 @@ export interface TypeNews {
 export class NewsService {
     private readonly BASE_URL = 'https://api.currentsapi.services/v2/latest-news'
     private readonly REFRESH_COOLDOWN_MS = 60 * 1000; // 60s — protege contra spam de refresh e respeita limites da Currents API
-    private readonly CACHE_TTL_MS = 1000 * 60 * 15; // 15min — mantido para consulta normal
+    private readonly CACHE_TTL_MS = 1000 * 60 * 15; // 15min — para GET /news
+    private readonly CHECK_UPDATES_CACHE_TTL_MS = 1000 * 60 * 5; // 5min — para GET /news/check-updates
 
     constructor(
         private readonly httpService: HttpService,
@@ -61,6 +62,11 @@ export class NewsService {
 
     private getRefreshKey(page: number, languages: string[]): string {
         return `${this.getCacheKey(page, languages)}:lastRefresh`;
+    }
+
+    private getCheckUpdatesCacheKey(page: number, languages: string[]): string {
+        const langsKey = languages.join('-');
+        return `check-updates:page:${page}:langs:${langsKey}`;
     }
 
     private normalizeImage(image: unknown): string | null {
@@ -238,7 +244,7 @@ export class NewsService {
     };
 
 
-    async checkUpdates(after: string)
+    async checkUpdates(after: string, languages?: string[])
         : Promise<{ hasNew: boolean, count: number }> {
         // Se after vazio ou inválido, considera que não há referência — retorna sem novos
         if (!after || typeof after !== 'string' || !after.trim()) {
@@ -250,13 +256,70 @@ export class NewsService {
             return { hasNew: false, count: 0 };
         }
 
-        // Reutiliza cache de page 1 — respeita TTL e cooldown já implementados em getLatestNews
-        // Não força refresh aqui para evitar spam; frontend deve usar ?refresh=true em /news quando quiser forçar
-        const latestNews =
-            await this.getLatestNews(1);
+        const normalizedLanguages = this.normalizeLanguages(languages);
+        const cacheKey = this.getCheckUpdatesCacheKey(1, normalizedLanguages);
 
-        const newsList =
-            latestNews.news || [];
+        let cachedData = await this.cacheManager.get<ResponseNews>(cacheKey);
+        let newsList: TypeNews[] = [];
+
+        if (cachedData) {
+            newsList = cachedData.news || [];
+        } else {
+            try {
+                const apiKey = this.ConfigService.get<string>('CURRENTS_API_KEY');
+                const commonParams = {
+                    apiKey,
+                    page_number: 1,
+                    category: 'science_technology',
+                };
+                const promises = normalizedLanguages.map((language) =>
+                    firstValueFrom(
+                        this.httpService.get<ResponseNews>(this.BASE_URL, {
+                            params: { ...commonParams, language },
+                        }),
+                    ),
+                );
+                const settled = await Promise.allSettled(promises);
+                const successful: ResponseNews[] = [];
+                for (const result of settled) {
+                    if (result.status === 'fulfilled' && result.value?.data) {
+                        const data = result.value.data as ResponseNews;
+                        if (Array.isArray(data.news)) {
+                            successful.push(data);
+                        } else if (data) {
+                            successful.push(data);
+                        }
+                    }
+                }
+                if (successful.length === 0) {
+                    return { hasNew: false, count: 0 };
+                } else {
+                    const allNews: TypeNews[] = [];
+                    let status = 'ok';
+                    for (const data of successful) {
+                        if (data.status) status = data.status;
+                        const list: TypeNews[] = (data.news ?? []) as TypeNews[];
+                        for (const n of list) {
+                            allNews.push(this.normalizeNews(n));
+                        }
+                    }
+                    const deduped = this.deduplicate(allNews);
+                    const sorted = this.sortByPublishedDesc(deduped);
+                    const mergedResponse: ResponseNews = {
+                        status,
+                        news: sorted,
+                        page: 1,
+                        hasMore: sorted.length > 0,
+                        count: sorted.length,
+                        cached: false,
+                    };
+                    await this.cacheManager.set(cacheKey, mergedResponse, this.CHECK_UPDATES_CACHE_TTL_MS);
+                    newsList = sorted;
+                }
+            } catch {
+                return { hasNew: false, count: 0 };
+            }
+        }
 
         const newNews = newsList.filter(
             (news: TypeNews) => {

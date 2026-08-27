@@ -239,11 +239,11 @@ describe('NewsService', () => {
         cached: true,
       };
       cache.get.mockImplementation((key) => {
-        if (key === 'latest-news:page:1:langs:en-es-pt') return Promise.resolve(cached);
+        if (key === 'check-updates:page:1:langs:en-es-pt') return Promise.resolve(cached);
         return Promise.resolve(null);
       });
       const result = await service.checkUpdates(new Date(Date.now() - 1000).toISOString());
-      expect(cache.get).toHaveBeenCalledWith('latest-news:page:1:langs:en-es-pt');
+      expect(cache.get).toHaveBeenCalledWith('check-updates:page:1:langs:en-es-pt');
       expect(result.hasNew).toBe(true);
     });
   });
