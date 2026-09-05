@@ -7,6 +7,8 @@ export class KeepAliveController {
   @Public()
   @HttpCode(HttpStatus.OK)
   keepAlive() {
+    const time = new Date()
+    console.log(`Health checked at: ${time.getHours()}:${time.getMinutes()}:${time.getSeconds()}`)
     return { status: 'ok' };
   }
 }
